@@ -1,0 +1,10 @@
+#Mac Stuff
+.DS_Store
+
+#Data Files
+data/*.csv
+
+# python stuff
+__pycache__/
+.eggs/
+*.egg-info/
