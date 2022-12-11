@@ -90,7 +90,8 @@ def homog_3d(xi, theta):
     else:
         # Translation and rotation
         R = rotation_3d(w, theta)
-        p = (1/np.square(np.linalg.norm(w))) * ((np.dot(np.dot((I - R), skew_3d(w)), v)) + theta * np.dot(np.outer(w, w), v))
+        # p = (1/np.square(np.linalg.norm(w))) * ((np.dot(np.dot((I - R), skew_3d(w)), v)) + theta * np.dot(np.outer(w, w), v))
+        p = (1/np.square(np.linalg.norm(w))) * ((I - R) @ skew_3d(w) @ v + theta * np.outer(w, w) @ v)
     g = np.eye(4)
     g[:3, :3] = R
     g[:3, 3] = p
