@@ -49,10 +49,9 @@ def main():
                     gst0[0:3,3] = qs[:,7]
                 recorded_zero_configuration = True
                 print("Finished recording zero configuration.")
-                print(twists)
             joint_angles = np.array(list(limb.joint_angles().values()))
             gst = np.dot(kfs.prod_exp(twists, joint_angles), gst0)
-            # print("Gst: ", gst)
+            print("Gst: ", gst)
             pose = tfBuffer.lookup_transform('base','right_hand', rospy.Time())
             (roll, pitch, yaw) = tf.transformations.euler_from_quaternion([pose.transform.rotation.x, pose.transform.rotation.y,
                                                                            pose.transform.rotation.z, pose.transform.rotation.w])
