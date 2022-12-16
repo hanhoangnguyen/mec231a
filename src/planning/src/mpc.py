@@ -8,6 +8,7 @@ import numpy as np
 import pyomo
 import pyomo.environ as pyo
 from pyomo.opt import SolverStatus, TerminationCondition
+import sys
 
 gst0 = [[-0.0004, -0.0017,  1.    ,  1.0162],
         [-0.9846, -0.1751, -0.0006,  0.1606],
@@ -22,7 +23,7 @@ twists = [[ 0.0001, -0.3158, -0.0002, -0.3164, -0.0007, -0.316 , -0.0001],
           [ 1.    ,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000]]
 
 
-def solve_cftoc(A, B, P, Q, R, N, x0, yref):
+def solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim):
 
     model = pyo.ConcreteModel()
     model.N = N
@@ -175,6 +176,10 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref):
             g = matmul(g, g_i)
         return g
 
+    def forward_kinematics(joint_angles):
+        gst = matmul(prod_exp(twists,joint_angles), gst0)
+        return [gst[0][3], gst[1][3], gst[2][3]]
+
     # Objective:
     def objective_rule(model):
         costY = 0.0
@@ -183,8 +188,7 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref):
         for t in model.tIDX:
             if t < model.N:
                 joint_angles = [model.x[i,t] for i in model.xIDX]
-                gst = matmul(prod_exp(twists,joint_angles), gst0)
-                y = [gst[3][0], gst[3][0], gst[3][2]]
+                y = forward_kinematics(joint_angles)
                 for i in range(3):
                     for j in range(3):
                         costY += (y[i]-yref[i]) * model.Q[i,j] * (y[j]-yref[j]) 
@@ -194,12 +198,11 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref):
                     if t < model.N:
                         costU += model.u[i, t] * model.R[i, j] * model.u[j, t]
         joint_angles_N = [model.x[i,model.N] for i in model.xIDX]
-        gst_N = matmul(prod_exp(twists,joint_angles_N), gst0)
-        y_N = [gst_N[3][0], gst_N[3][0], gst_N[3][2]]
+        y_N = forward_kinematics(joint_angles_N)
         for i in range(3):
             for j in range(3):               
                 costTerminal += (y_N[i]-yref[i]) * model.P[i,j] * (y_N[j]-yref[j])
-        return costY #+ costU #+ costTerminal
+        return costY + costU + costTerminal
     
     model.cost = pyo.Objective(rule = objective_rule, sense = pyo.minimize)
     
@@ -209,6 +212,8 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref):
                             +  sum(model.B[i, j] * model.u[j, t] for j in model.uIDX) ) == 0.0 if t < model.N else pyo.Constraint.Skip
 
     model.equality_constraints = pyo.Constraint(model.xIDX, model.tIDX, rule=dynamic_constraint_rule)
+
+    # Initial Constraints
     model.init_const1 = pyo.Constraint(expr = model.x[0, 0] == x0[0])
     model.init_const2 = pyo.Constraint(expr = model.x[1, 0] == x0[1])
     model.init_const3 = pyo.Constraint(expr = model.x[2, 0] == x0[2])
@@ -216,7 +221,51 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref):
     model.init_const5 = pyo.Constraint(expr = model.x[4, 0] == x0[4])
     model.init_const6 = pyo.Constraint(expr = model.x[5, 0] == x0[5])
     model.init_const7 = pyo.Constraint(expr = model.x[6, 0] == x0[6])
-        
+
+    # Input Constraints
+    model.constraint1 = pyo.Constraint(model.tIDX,  #Maximum velocity constraint
+                                    rule=lambda model, t: model.u[0, t] <= U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint2 = pyo.Constraint(model.tIDX,  #Minimum velocity constraint
+                                    rule=lambda model, t: model.u[0, t] >= -U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint3 = pyo.Constraint(model.tIDX,  #Maximum velocity constraint
+                                    rule=lambda model, t: model.u[1, t] <= U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint4 = pyo.Constraint(model.tIDX,  #Minimum velocity constraint
+                                    rule=lambda model, t: model.u[1, t] >= -U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint5 = pyo.Constraint(model.tIDX,  #Maximum velocity constraint
+                                    rule=lambda model, t: model.u[2, t] <= U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint6 = pyo.Constraint(model.tIDX,  #Minimum velocity constraint
+                                    rule=lambda model, t: model.u[2, t] >= -U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint7 = pyo.Constraint(model.tIDX,  #Maximum velocity constraint
+                                    rule=lambda model, t: model.u[3, t] <= U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint8 = pyo.Constraint(model.tIDX,  #Minimum velocity constraint
+                                    rule=lambda model, t: model.u[3, t] >= -U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint9 = pyo.Constraint(model.tIDX,  #Maximum velocity constraint
+                                    rule=lambda model, t: model.u[4, t] <= U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint10 = pyo.Constraint(model.tIDX,  #Minimum velocity constraint
+                                    rule=lambda model, t: model.u[4, t] >= -U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint11 = pyo.Constraint(model.tIDX,  #Maximum velocity constraint
+                                    rule=lambda model, t: model.u[5, t] <= U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint12 = pyo.Constraint(model.tIDX,  #Minimum velocity constraint
+                                    rule=lambda model, t: model.u[5, t] >= -U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint13 = pyo.Constraint(model.tIDX,  #Maximum velocity constraint
+                                    rule=lambda model, t: model.u[6, t] <= U_lim
+                                    if t < N else pyo.Constraint.Skip)
+    model.constraint14 = pyo.Constraint(model.tIDX,  #Minimum velocity constraint
+                                    rule=lambda model, t: model.u[6, t] >= -U_lim
+                                    if t < N else pyo.Constraint.Skip)
+
     solver = pyo.SolverFactory('ipopt')
     results = solver.solve(model)
     
@@ -232,26 +281,47 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref):
     
     return [model, feas, xOpt, uOpt, JOpt]
 
-Ts = 0.1
+Ts = 1
 A = np.eye(7)
 B = np.eye(7)*Ts
-Q = np.eye(3)*1000
+Q = np.eye(3)*10
 R = np.eye(7)
 P = Q
-N = 1000
+N = 10
 x0 = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
 yref = [0.5, 0.5, 0.5]
+U_lim = 0.1
 
-[model, feas, xOpt, uOpt, JOpt] = solve_cftoc(A, B, P, Q, R, N, x0, yref)
-
-# print('JOpt=', JOpt)
-print('xOpt=', xOpt)
-# print('uOpt=', uOpt)
-# print('feas=', feas)
+from ttictoc import tic,toc
+tic()
+[model, feas, xOpt, uOpt, JOpt] = solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim)
+elapsed = toc()
+print('Elapsed time:',elapsed)
 
 xOpt = np.array(xOpt)
-import csv
-#Change the filename for data taking!
-with open('mpc_data3.csv', 'w') as f:
-    mywriter = csv.writer(f, delimiter=',')
-    mywriter.writerows(xOpt)
+uOpt = np.array(uOpt)
+
+import kin_func_skeleton as kfs
+yOpt = np.zeros((3,xOpt.shape[1]))
+for i in range(xOpt.shape[1]):
+    joint_angles = xOpt[:,i]
+    gst = np.dot(kfs.prod_exp(np.array(twists), joint_angles), gst0)
+    yOpt[:,i] = np.array([gst[0][3], gst[1][3], gst[2][3]]).T
+
+# print('JOpt=', JOpt)
+# print('xOpt=', xOpt)
+# print('uOpt=', uOpt)
+# print('yOpt=', yOpt)
+
+# Run with filename to take save data on xOpt
+if len(sys.argv) == 2:
+    import csv
+    with open(sys.argv[1] + '_x' + '.csv', 'w') as f:
+        mywriter = csv.writer(f, delimiter=',')
+        mywriter.writerows(xOpt)
+    with open(sys.argv[1] + '_input' + '.csv', 'w') as f:
+        mywriter = csv.writer(f, delimiter=',')
+        mywriter.writerows(uOpt)
+    with open(sys.argv[1] + '_output' + '.csv', 'w') as f:
+        mywriter = csv.writer(f, delimiter=',')
+        mywriter.writerows(yOpt)
