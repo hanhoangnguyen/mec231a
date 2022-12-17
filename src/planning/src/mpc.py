@@ -265,6 +265,37 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim):
     model.constraint14 = pyo.Constraint(model.tIDX,  #Minimum velocity constraint
                                     rule=lambda model, t: model.u[6, t] >= -U_lim
                                     if t < N else pyo.Constraint.Skip)
+    #State Constraints
+    model.constraint15 = pyo.Constraint(model.tIDX, #Joint 0 <= 45 degrees
+                                        rule=lambda model, t: model.x[0, t] <= 0.785
+                                        if t <= N else pyo.Constraint.Skip)
+    model.constraint16 = pyo.Constraint(model.tIDX, #Joint 0 >= -45 degrees
+                                        rule=lambda model, t: model.x[0, t] >= -0.785
+                                        if t <= N else pyo.Constraint.Skip)
+    model.constraint17 = pyo.Constraint(model.tIDX, #Joint 1 <= 30 degrees
+                                        rule=lambda model, t: model.x[1, t] <= 0.524
+                                        if t <= N else pyo.Constraint.Skip)
+    model.constraint18 = pyo.Constraint(model.tIDX, #Joint 1 >= -45 degrees
+                                        rule=lambda model, t: model.x[1, t] >= -0.785
+                                        if t <= N else pyo.Constraint.Skip)
+    model.constraint19 = pyo.Constraint(model.tIDX, #Joint 2 <= -1 degrees
+                                        rule=lambda model, t: model.x[2,t] <= -0.017
+                                        if t <= N else pyo.Constraint.Skip)
+    model.constraint20 = pyo.Constraint(model.tIDX, #Joint 2 >= -120 degrees
+                                        rule=lambda model, t: model.x[2,t] >= -2.094
+                                        if t >= N else pyo.Constraint.Skip)
+    model.constraint21 = pyo.Constraint(model.tIDX, #Joint 3 <= 45 degrees
+                                        rule=lambda model, t: model.x[3,t] <= 0.785
+                                        if t <= N else pyo.Constraint.Skip)
+    model.constraint22 = pyo.Constraint(model.tIDX, #Joint 3 >= -90 degrees
+                                        rule=lambda model, t: model.x[3,t] >= -1.571
+                                        if t <= N else pyo.Constraint.Skip)
+    model.constraint23 = pyo.Constraint(model.tIDX, #Joint 5 <= 60 degrees
+                                        rule=lambda model, t: model.x[5,t] <= 1.047
+                                        if t <= N else pyo.Constraint.Skip)
+    model.constraint24 = pyo.Constraint(model.tIDX, #Joint 5 >= -60 degrees
+                                        rule=lambda model, t: model.x[5,t] >= -1.047
+                                        if t <= N else pyo.Constraint.Skip)
 
     solver = pyo.SolverFactory('ipopt')
     results = solver.solve(model)
@@ -288,7 +319,7 @@ Q = np.eye(3)*10
 R = np.eye(7)
 P = Q
 N = 10
-x0 = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+x0 = np.array([0.1, 0.2, -0.3, 0.4, 0.5, 0.6, 0.7])
 yref = [0.5, 0.5, 0.5]
 U_lim = 0.1
 
@@ -311,7 +342,7 @@ for i in range(xOpt.shape[1]):
 # print('JOpt=', JOpt)
 # print('xOpt=', xOpt)
 # print('uOpt=', uOpt)
-# print('yOpt=', yOpt)
+print('yOpt=', yOpt)
 
 # Run with filename to take save data on xOpt
 if len(sys.argv) == 2:
