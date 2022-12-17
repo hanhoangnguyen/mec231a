@@ -23,7 +23,7 @@ twists = [[ 0.0001, -0.3158, -0.0002, -0.3164, -0.0007, -0.316 , -0.0001],
           [ 1.    ,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000,  0.0000]]
 
 
-def solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim):
+def solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim, eps):
 
     model = pyo.ConcreteModel()
     model.N = N
@@ -177,6 +177,9 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim):
         return g
 
     def forward_kinematics(joint_angles):
+        return matmul(prod_exp(twists,joint_angles), gst0)
+
+    def forward_kinematics_position(joint_angles):
         gst = matmul(prod_exp(twists,joint_angles), gst0)
         return [gst[0][3], gst[1][3], gst[2][3]]
 
@@ -188,7 +191,7 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim):
         for t in model.tIDX:
             if t < model.N:
                 joint_angles = [model.x[i,t] for i in model.xIDX]
-                y = forward_kinematics(joint_angles)
+                y = forward_kinematics_position(joint_angles)
                 for i in range(3):
                     for j in range(3):
                         costY += (y[i]-yref[i]) * model.Q[i,j] * (y[j]-yref[j]) 
@@ -198,7 +201,7 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim):
                     if t < model.N:
                         costU += model.u[i, t] * model.R[i, j] * model.u[j, t]
         joint_angles_N = [model.x[i,model.N] for i in model.xIDX]
-        y_N = forward_kinematics(joint_angles_N)
+        y_N = forward_kinematics_position(joint_angles_N)
         for i in range(3):
             for j in range(3):               
                 costTerminal += (y_N[i]-yref[i]) * model.P[i,j] * (y_N[j]-yref[j])
@@ -266,35 +269,104 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim):
                                     rule=lambda model, t: model.u[6, t] >= -U_lim
                                     if t < N else pyo.Constraint.Skip)
     #State Constraints
-    model.constraint15 = pyo.Constraint(model.tIDX, #Joint 0 <= 45 degrees
-                                        rule=lambda model, t: model.x[0, t] <= 0.785
+    # model.constraint15 = pyo.Constraint(model.tIDX, #Joint 0 <= 45 degrees
+    #                                     rule=lambda model, t: model.x[0, t] <= 0.785
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint16 = pyo.Constraint(model.tIDX, #Joint 0 >= -45 degrees
+    #                                     rule=lambda model, t: model.x[0, t] >= -0.785
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint17 = pyo.Constraint(model.tIDX, #Joint 1 <= 30 degrees
+    #                                     rule=lambda model, t: model.x[1, t] <= 0.524
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint18 = pyo.Constraint(model.tIDX, #Joint 1 >= -45 degrees
+    #                                     rule=lambda model, t: model.x[1, t] >= -0.785
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint19 = pyo.Constraint(model.tIDX, #Joint 2 <= -1 degrees
+    #                                     rule=lambda model, t: model.x[2,t] <= -0.017
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint20 = pyo.Constraint(model.tIDX, #Joint 2 >= -120 degrees
+    #                                     rule=lambda model, t: model.x[2,t] >= -2.094
+    #                                     if t >= N else pyo.Constraint.Skip)
+    # model.constraint21 = pyo.Constraint(model.tIDX, #Joint 3 <= 45 degrees
+    #                                     rule=lambda model, t: model.x[3,t] <= 0.785
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint22 = pyo.Constraint(model.tIDX, #Joint 3 >= -90 degrees
+    #                                     rule=lambda model, t: model.x[3,t] >= -1.571
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint23 = pyo.Constraint(model.tIDX, #Joint 5 <= 60 degrees
+    #                                     rule=lambda model, t: model.x[5,t] <= 1.047
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint24 = pyo.Constraint(model.tIDX, #Joint 5 >= -60 degrees
+    #                                     rule=lambda model, t: model.x[5,t] >= -1.047
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # Orientation Constraint
+    model.constraint25 = pyo.Constraint(model.tIDX, #gst[0][0] <= -1 + eps
+                                        rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[0][0] <= -1 + eps
                                         if t <= N else pyo.Constraint.Skip)
-    model.constraint16 = pyo.Constraint(model.tIDX, #Joint 0 >= -45 degrees
-                                        rule=lambda model, t: model.x[0, t] >= -0.785
+    model.constraint26 = pyo.Constraint(model.tIDX, #gst[0][0] >= -1 + eps
+                                        rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[0][0] >= -1 - eps
                                         if t <= N else pyo.Constraint.Skip)
-    model.constraint17 = pyo.Constraint(model.tIDX, #Joint 1 <= 30 degrees
-                                        rule=lambda model, t: model.x[1, t] <= 0.524
+    model.constraint27 = pyo.Constraint(model.tIDX, #gst[1][0] <= 0 + eps
+                                        rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[1][0] <= 0 + eps
                                         if t <= N else pyo.Constraint.Skip)
-    model.constraint18 = pyo.Constraint(model.tIDX, #Joint 1 >= -45 degrees
-                                        rule=lambda model, t: model.x[1, t] >= -0.785
+    model.constraint28 = pyo.Constraint(model.tIDX, #gst[1][0] >= 0 - eps
+                                        rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[1][0] >= 0 - eps
                                         if t <= N else pyo.Constraint.Skip)
-    model.constraint19 = pyo.Constraint(model.tIDX, #Joint 2 <= -1 degrees
-                                        rule=lambda model, t: model.x[2,t] <= -0.017
+    model.constraint29 = pyo.Constraint(model.tIDX, #gst[2][0] >= 0 - eps
+                                        rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[2][0] <= 0 + eps
                                         if t <= N else pyo.Constraint.Skip)
-    model.constraint20 = pyo.Constraint(model.tIDX, #Joint 2 >= -120 degrees
-                                        rule=lambda model, t: model.x[2,t] >= -2.094
-                                        if t >= N else pyo.Constraint.Skip)
-    model.constraint21 = pyo.Constraint(model.tIDX, #Joint 3 <= 45 degrees
-                                        rule=lambda model, t: model.x[3,t] <= 0.785
+    model.constraint30 = pyo.Constraint(model.tIDX, #gst[2][0] >= 0 - eps
+                                        rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[2][0] >= 0 - eps
                                         if t <= N else pyo.Constraint.Skip)
-    model.constraint22 = pyo.Constraint(model.tIDX, #Joint 3 >= -90 degrees
-                                        rule=lambda model, t: model.x[3,t] >= -1.571
+    # model.constraint31 = pyo.Constraint(model.tIDX, 
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[0][1] <= 0 + eps
+    #                                     if t <= N else pyo.Constraint.Skip)                                       
+    # model.constraint32 = pyo.Constraint(model.tIDX, 
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[0][1] >= 0 - eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint33 = pyo.Constraint(model.tIDX, 
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[1][1] <= 1 + eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint34 = pyo.Constraint(model.tIDX, 
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[1][1] >= -1 - eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint35 = pyo.Constraint(model.tIDX,
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[2][1] <= 0 + eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint36 = pyo.Constraint(model.tIDX, 
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[2][1] >= 0 - eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint37 = pyo.Constraint(model.tIDX,
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[0][2] <= 0 + eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint38 = pyo.Constraint(model.tIDX, 
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[0][2] >= 0 - eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint39 = pyo.Constraint(model.tIDX, 
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[1][2] <= 0 + eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint40 = pyo.Constraint(model.tIDX, 
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[1][2] >= 0 - eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint41 = pyo.Constraint(model.tIDX, 
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[2][2] <= -1 + eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+    # model.constraint42 = pyo.Constraint(model.tIDX, 
+    #                                     rule=lambda model, t: forward_kinematics([model.x[i,t] for i in model.xIDX])[2][2] >= -1 - eps
+    #                                     if t <= N else pyo.Constraint.Skip)
+
+    # Path Constraint
+    model.constraint43 = pyo.Constraint(model.tIDX,
+                                        rule=lambda model, t: forward_kinematics_position([model.x[i,t] for i in model.xIDX])[1] <= 0.16701999999999667 + eps
                                         if t <= N else pyo.Constraint.Skip)
-    model.constraint23 = pyo.Constraint(model.tIDX, #Joint 5 <= 60 degrees
-                                        rule=lambda model, t: model.x[5,t] <= 1.047
+    model.constraint44 = pyo.Constraint(model.tIDX, 
+                                        rule=lambda model, t: forward_kinematics_position([model.x[i,t] for i in model.xIDX])[1] >= 0.16701999999999667 - eps
                                         if t <= N else pyo.Constraint.Skip)
-    model.constraint24 = pyo.Constraint(model.tIDX, #Joint 5 >= -60 degrees
-                                        rule=lambda model, t: model.x[5,t] >= -1.047
+    model.constraint45 = pyo.Constraint(model.tIDX,
+                                        rule=lambda model, t: forward_kinematics_position([model.x[i,t] for i in model.xIDX])[2] <= 0.5184984909676793 + eps
+                                        if t <= N else pyo.Constraint.Skip)
+    model.constraint46 = pyo.Constraint(model.tIDX, 
+                                        rule=lambda model, t: forward_kinematics_position([model.x[i,t] for i in model.xIDX])[2] >= 0.5184984909676793 - eps
                                         if t <= N else pyo.Constraint.Skip)
 
     solver = pyo.SolverFactory('ipopt')
@@ -315,17 +387,23 @@ def solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim):
 Ts = 1
 A = np.eye(7)
 B = np.eye(7)*Ts
-Q = np.eye(3)*10
+Q = np.eye(3)*100
 R = np.eye(7)
 P = Q
 N = 10
-x0 = np.array([0.1, 0.2, -0.3, 0.4, 0.5, 0.6, 0.7])
-yref = [0.5, 0.5, 0.5]
-U_lim = 0.1
+# x0 = np.array([0.1, 0.2, -0.3, 0.4, 0.5, 0.6, 0.7]) #State Constraints Only
+x0 = np.array([0, -1, 0, 1, 0, 1.6, 1.57079632679]) #Orientation Constraints or Path Constraints Only
+# yref = [0.5, 0.5, 0.5] #State Constraints Only
+# yref = [0.747, 0.312, 0.77] #Orientation Constraints Only
+yref = [0.6935683264807795-0.5, 0.16701999999999667, 0.5184984909676793] #Path Constraints Only
+
+U_lim = 0.2
+# esp = 0.3 #Orientation Constraints Only
+esp = 0.01 #Path Constraints Only
 
 from ttictoc import tic,toc
 tic()
-[model, feas, xOpt, uOpt, JOpt] = solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim)
+[model, feas, xOpt, uOpt, JOpt] = solve_cftoc(A, B, P, Q, R, N, x0, yref, U_lim, esp)
 elapsed = toc()
 print('Elapsed time:',elapsed)
 
@@ -343,6 +421,12 @@ for i in range(xOpt.shape[1]):
 # print('xOpt=', xOpt)
 # print('uOpt=', uOpt)
 print('yOpt=', yOpt)
+
+x0_tuck = [0, -1, 0, 1, 0, 1.6, 1.57079632679]
+gst_tuck = np.dot(kfs.prod_exp(np.array(twists), np.array(x0_tuck)), gst0)
+y_tuck = [gst_tuck[0][3], gst_tuck[1][3], gst_tuck[2][3]]
+# print('y_tuck')
+# print(y_tuck)
 
 # Run with filename to take save data on xOpt
 if len(sys.argv) == 2:
